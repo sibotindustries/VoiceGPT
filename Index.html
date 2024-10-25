@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat com Voz</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            margin: 0;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .circle {
+            display: none;
+            width: 150px;
+            height: 150px;
+            background-color: #fff;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        .wave {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            width: 150px;
+            margin-bottom: 20px;
+        }
+
+        .wave div {
+            width: 20px;
+            height: 50px;
+            background-color: white;
+            border-radius: 10px;
+            transition: height 0.1s ease;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #333;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .error-message {
+            display: none;
+            color: red;
+            margin-top: 20px;
+        }
+
+        audio {
+            display: none;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay">Carregando...</div>
+
+    <div class="circle"></div>
+    <div class="wave">
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+    </div>
+    <button id="startListening">Falar</button>
+    <p class="error-message" id="errorMessage"></p>
+    <audio id="audioPlayer"></audio>
+    <div id="chat-area"></div>
+
+    <script>
+        window.addEventListener('load', function() {
+            document.querySelector('.loading-overlay').style.display = 'none';
+        });
+
+        const circle = document.querySelector('.circle');
+        const wave = document.querySelector('.wave');
+        const bars = document.querySelectorAll('.wave div');
+        const startListeningButton = document.getElementById('startListening');
+        const errorMessage = document.getElementById('errorMessage');
+        const chatArea = document.getElementById('chat-area');
+        const chatHistory = [];
+
+        startListeningButton.addEventListener('click', listenAndRespond);
+
+        function listenAndRespond() {
+            errorMessage.style.display = 'none';
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'pt-BR';
+            recognition.start();
+
+            recognition.onstart = function() {
+                circle.style.display = 'block';
+                wave.style.display = 'none';
+            };
+
+            recognition.onresult = async function(event) {
+                const userSpeech = event.results[0][0].transcript;
+                console.log('Usuário disse:', userSpeech);
+
+                circle.style.display = 'none';
+                wave.style.display = 'flex';
+                animateWave();
+
+                chatHistory.push({ user: 'user', message: userSpeech }); // Store user message
+                displayChat(chatHistory);
+
+                try {
+                    const response = generateResponse(userSpeech); // Simple response generation
+                    // Speak the response AFTER the wave animation starts
+                    speak(response);
+                    chatHistory.push({ user: 'bot', message: response }); // Store bot message
+                    displayChat(chatHistory);
+                } catch (error) {
+                    showError("Erro ao obter resposta: " + error.message);
+                }
+            };
+
+            recognition.onerror = function(event) {
+                showError("Erro ao reconhecer a fala: " + event.error);
+            };
+        }
+
+        function generateResponse(userMessage) {
+            let response = "Não entendi. Pode repetir?";
+
+            if (userMessage.includes("olá") || userMessage.includes("oi")) {
+                response = "Olá! Como posso te ajudar?";
+            } else if (userMessage.includes("qual o seu nome")) {
+                response = "Sou um chatbot. :)";
+            }
+            // Add more simple rules here
+
+            return response;
+        }
+
+        function speak(text) {
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'pt-BR';
+
+            utterance.onstart = function() {
+              circle.style.display = 'none';
+              wave.style.display = 'flex';
+              animateWave();
+            };
+
+            utterance.onend = function() {
+              wave.style.display = 'none';
+            };
+
+            speechSynthesis.speak(utterance);
+          } else {
+            showError("Seu navegador não suporta a síntese de voz."); 
+          }
+        }
+
+        function animateWave() {
+            bars.forEach((bar) => {
+                const height = Math.random() * 100;
+                bar.style.height = `${height}px`;
+            });
+
+            if (wave.style.display === 'flex') {
+                requestAnimationFrame(animateWave);
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            circle.style.display = 'none';
+            wave.style.display = 'none';
+        }
+
+        function displayChat(chatData) {
+            chatArea.innerHTML = ''; // Clear previous messages
+
+            chatData.forEach(message => {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                messageElement.classList.add(message.user === 'user' ? 'user-message' : 'bot-message');
+
+                messageElement.textContent = message.message;
+                chatArea.appendChild(messageElement);
+            });
+        }
+    </script>
+</body>
+</html>
